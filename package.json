@@ -9,10 +9,10 @@
     "@mui/icons-material": "^5.14.19",
     "@mui/material": "^5.14.20",
     "@mui/x-date-pickers": "^6.18.2",
+    "firebase": "^10.14.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "gapi-script": "^1.2.0"
+    "react-scripts": "5.0.1"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -43,4 +43,4 @@
   "devDependencies": {
     "gh-pages": "^6.1.0"
   }
-} 
+}

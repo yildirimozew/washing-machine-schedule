@@ -9,7 +9,8 @@ A React app for flatmates to schedule washing machine and dryer usage times.
 - **Machine Selection**: Choose between 2 washing machines or 1 dryer
 - **Continuous Timeline**: Visual weekly schedule with continuous time axis (6 AM - 11 PM)
 - **Flexible Reservations**: Select any day, enter custom start/end times
-- **Persistent Storage**: Reservations saved to browser localStorage
+- **Cross-Device Sync**: Real-time synchronization across all devices using Firebase Firestore
+- **Offline Support**: Falls back to localStorage when offline, syncs when reconnected
 - **Conflict Detection**: Prevents overlapping reservations
 - **Material-UI Design**: Clean, modern interface with Google Material theme
 - **Mobile Responsive**: Works on all devices
@@ -21,18 +22,20 @@ A React app for flatmates to schedule washing machine and dryer usage times.
    npm install
    ```
 
-2. **Configure Google OAuth**:
-   - Go to [Google Cloud Console](https://console.developers.google.com/)
-   - Create a new project or select existing one
-   - Enable the Google+ API
-   - Create OAuth 2.0 credentials (Web application)
-   - Add your domain to authorized JavaScript origins
-   - Copy the client ID
+2. **Set up Firebase** (optional - enables authentication and cross-device sync):
+   - Go to [Firebase Console](https://console.firebase.google.com/)
+   - Create a new project
+   - Enable Authentication with Google provider
+   - Enable Firestore Database
+   - Get your configuration values
 
-3. **Set environment variables**:
+3. **Set environment variables** (optional):
    Create a `.env.local` file in the project root:
    ```bash
-   REACT_APP_GOOGLE_CLIENT_ID=your-google-oauth-client-id-here.apps.googleusercontent.com
+   # Firebase configuration (enables authentication and cross-device sync)
+   REACT_APP_FIREBASE_API_KEY=your-firebase-api-key
+   REACT_APP_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+   REACT_APP_FIREBASE_PROJECT_ID=your-project-id
    ```
 
 4. **Start development server**:
@@ -97,7 +100,7 @@ Your app will be available at: `https://yourusername.github.io/washing-machine-s
 - **Authentication**: Google OAuth 2.0 with Google Identity Services
 - **Icons**: Material Icons
 - **State Management**: React Context + useState
-- **Storage**: Browser localStorage with automatic cleanup
+- **Storage**: Firebase Firestore for cross-device sync + localStorage fallback
 - **Timeline**: Continuous time axis with percentage-based positioning
 - **Responsive**: Mobile-first design
 - **Time Range**: 6:00 AM to 11:00 PM with flexible start/end times

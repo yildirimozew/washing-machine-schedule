@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { signInWithPopup, GoogleAuthProvider, signOut as firebaseSignOut, onAuthStateChanged } from 'firebase/auth';
+import { auth, isFirebaseEnabled } from '../config/firebase';
 
 const AuthContext = createContext();
 
@@ -14,150 +16,136 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [displayName, setDisplayName] = useState('');
-
-  // Google Client ID - You'll need to replace this with your actual client ID
-  const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || 'demo-client-id';
+  const [firebaseUser, setFirebaseUser] = useState(null);
 
   useEffect(() => {
-    // Load saved user data from localStorage
-    const savedUser = localStorage.getItem('user');
-    const savedDisplayName = localStorage.getItem('userDisplayName');
+    // Set up Firebase Auth state listener
+    let unsubscribeAuth = () => {};
     
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-        setDisplayName(savedDisplayName || '');
-      } catch (error) {
-        console.error('Error loading saved user data:', error);
+    if (isFirebaseEnabled && auth) {
+      console.log('Setting up Firebase Auth state listener...');
+      unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+        console.log('Firebase Auth state changed:', firebaseUser?.uid ? 'signed in' : 'signed out');
+        setFirebaseUser(firebaseUser);
+        
+        if (firebaseUser) {
+          // User signed in - extract user data from Firebase user
+          const userData = {
+            id: firebaseUser.uid,
+            email: firebaseUser.email,
+            name: firebaseUser.displayName,
+            picture: firebaseUser.photoURL
+          };
+          
+          setUser(userData);
+          localStorage.setItem('user', JSON.stringify(userData));
+          
+          // Set display name if not already set
+          const savedDisplayName = localStorage.getItem('userDisplayName');
+          if (!savedDisplayName) {
+            const defaultDisplayName = firebaseUser.displayName?.split(' ')[0] || firebaseUser.email?.split('@')[0];
+            setDisplayName(defaultDisplayName);
+            localStorage.setItem('userDisplayName', defaultDisplayName);
+          } else {
+            setDisplayName(savedDisplayName);
+          }
+        } else {
+          // User signed out
+          setUser(null);
+          setDisplayName('');
+          localStorage.removeItem('user');
+          localStorage.removeItem('userDisplayName');
+        }
+        
+        setIsLoading(false);
+      });
+    } else {
+      // Firebase not enabled - load from localStorage for demo mode
+      console.log('Firebase not enabled, using localStorage only');
+      const savedUser = localStorage.getItem('user');
+      const savedDisplayName = localStorage.getItem('userDisplayName');
+      
+      if (savedUser) {
+        try {
+          setUser(JSON.parse(savedUser));
+          setDisplayName(savedDisplayName || '');
+        } catch (error) {
+          console.error('Error loading saved user data:', error);
+          localStorage.removeItem('user');
+          localStorage.removeItem('userDisplayName');
+        }
+      }
+      setIsLoading(false);
+    }
+
+    // Cleanup function
+    return () => {
+      unsubscribeAuth();
+    };
+  }, []);
+
+  const signIn = async () => {
+    if (!isFirebaseEnabled || !auth) {
+      alert('Firebase Authentication not configured. Please set up Firebase to enable login.');
+      return;
+    }
+
+    try {
+      console.log('Starting Firebase Google Sign-In...');
+      const provider = new GoogleAuthProvider();
+      
+      // Add additional scopes if needed
+      provider.addScope('email');
+      provider.addScope('profile');
+      
+      const result = await signInWithPopup(auth, provider);
+      console.log('Firebase Google Sign-In successful:', result.user.uid);
+      
+      // Firebase Auth state listener will handle the rest
+    } catch (error) {
+      console.error('Firebase Google Sign-In failed:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      
+      if (error.code === 'auth/popup-closed-by-user') {
+        console.log('Sign-in popup was closed by user');
+      } else if (error.code === 'auth/popup-blocked') {
+        alert('Sign-in popup was blocked by browser. Please allow popups for this site and try again.');
+      } else if (error.code === 'auth/network-request-failed') {
+        alert('Network error during sign-in. Please check your connection and try again.');
+      } else if (error.code === 'auth/internal-error') {
+        alert('Authentication service error. Please try again later.');
+      } else {
+        alert(`Sign-in failed: ${error.message}`);
+      }
+    }
+  };
+
+  const signOut = async () => {
+    try {
+      // Sign out from Firebase Auth if enabled
+      if (isFirebaseEnabled && auth && firebaseUser) {
+        console.log('Signing out from Firebase Auth...');
+        await firebaseSignOut(auth);
+        console.log('Firebase Auth sign-out successful');
+      } else {
+        // Firebase not enabled, just clear local state
+        setUser(null);
+        setDisplayName('');
+        setFirebaseUser(null);
         localStorage.removeItem('user');
         localStorage.removeItem('userDisplayName');
       }
-    }
-
-    // Initialize Google Sign-In
-    if (window.google) {
-      initializeGoogleSignIn();
-    } else {
-      // Wait for Google script to load
-      const checkGoogle = setInterval(() => {
-        if (window.google) {
-          clearInterval(checkGoogle);
-          initializeGoogleSignIn();
-        }
-      }, 100);
-    }
-  }, []);
-
-  const initializeGoogleSignIn = () => {
-    try {
-      console.log('Initializing Google Sign-In with client ID:', GOOGLE_CLIENT_ID);
       
-      if (GOOGLE_CLIENT_ID === 'demo-client-id') {
-        console.warn('Using demo client ID - Google login will not work properly');
-        alert('Demo mode: Please configure REACT_APP_GOOGLE_CLIENT_ID environment variable for Google login to work');
-        setIsLoading(false);
-        return;
-      }
-
-      window.google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleGoogleResponse,
-        auto_select: false,
-        cancel_on_tap_outside: false,
-      });
-      
-      console.log('Google Sign-In initialized successfully');
-      setIsLoading(false);
+      console.log('Sign-out completed');
     } catch (error) {
-      console.error('Error initializing Google Sign-In:', error);
-      alert(`Failed to initialize Google Sign-In: ${error.message}`);
-      setIsLoading(false);
-    }
-  };
-
-  const handleGoogleResponse = (response) => {
-    try {
-      console.log('Google response received:', response);
-      
-      if (!response.credential) {
-        console.error('No credential in Google response');
-        alert('Authentication failed: No credential received from Google');
-        return;
-      }
-
-      // Decode the JWT token to get user info
-      const tokenParts = response.credential.split('.');
-      if (tokenParts.length !== 3) {
-        console.error('Invalid JWT token format');
-        alert('Authentication failed: Invalid token format');
-        return;
-      }
-
-      const decoded = JSON.parse(atob(tokenParts[1]));
-      console.log('Decoded token:', decoded);
-      
-      const userData = {
-        id: decoded.sub,
-        email: decoded.email,
-        name: decoded.name,
-        picture: decoded.picture,
-        credential: response.credential
-      };
-      
-      setUser(userData);
-      localStorage.setItem('user', JSON.stringify(userData));
-      
-      // If no display name is set, use the Google name as default
-      if (!displayName) {
-        const defaultDisplayName = decoded.given_name || decoded.name.split(' ')[0];
-        setDisplayName(defaultDisplayName);
-        localStorage.setItem('userDisplayName', defaultDisplayName);
-      }
-      
-      console.log('Authentication successful for:', userData.email);
-    } catch (error) {
-      console.error('Error handling Google response:', error);
-      alert(`Authentication failed: ${error.message}`);
-    }
-  };
-
-  const signIn = () => {
-    try {
-      if (!window.google) {
-        console.error('Google API not loaded');
-        alert('Google API not loaded. Please refresh the page and try again.');
-        return;
-      }
-
-      if (GOOGLE_CLIENT_ID === 'demo-client-id') {
-        alert('Demo mode: Please configure a real Google OAuth Client ID to enable login');
-        return;
-      }
-
-      console.log('Prompting for Google Sign-In...');
-      window.google.accounts.id.prompt((notification) => {
-        console.log('Google prompt notification:', notification);
-        if (notification.isNotDisplayed()) {
-          console.error('Google prompt not displayed:', notification.getNotDisplayedReason());
-          alert(`Google Sign-In prompt not displayed: ${notification.getNotDisplayedReason()}`);
-        } else if (notification.isSkippedMoment()) {
-          console.warn('Google prompt skipped:', notification.getSkippedReason());
-        }
-      });
-    } catch (error) {
-      console.error('Error during sign in:', error);
-      alert(`Sign-in error: ${error.message}`);
-    }
-  };
-
-  const signOut = () => {
-    setUser(null);
-    setDisplayName('');
-    localStorage.removeItem('user');
-    localStorage.removeItem('userDisplayName');
-    
-    if (window.google) {
-      window.google.accounts.id.disableAutoSelect();
+      console.error('Error during sign-out:', error);
+      // Still clear local state even if Firebase sign-out fails
+      setUser(null);
+      setDisplayName('');
+      setFirebaseUser(null);
+      localStorage.removeItem('user');
+      localStorage.removeItem('userDisplayName');
     }
   };
 
@@ -173,7 +161,9 @@ export const AuthProvider = ({ children }) => {
     signIn,
     signOut,
     updateDisplayName,
-    isAuthenticated: !!user
+    firebaseUser,
+    isAuthenticated: !!user,
+    isFirebaseAuthenticated: !!firebaseUser
   };
 
   return (

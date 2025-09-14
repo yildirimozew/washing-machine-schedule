@@ -9,13 +9,15 @@ import {
   CardContent,
   AppBar,
   Toolbar,
-  Button
+  Button,
+  Chip
 } from '@mui/material';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginPage from './components/LoginPage';
 import UserProfile from './components/UserProfile';
 import MachineSelector from './components/MachineSelector';
 import TimeSlotGrid from './components/TimeSlotGrid';
+import reservationService from './services/reservationService';
 
 const theme = createTheme({
   palette: {
@@ -28,61 +30,36 @@ const theme = createTheme({
   },
 });
 
-// Load reservations from localStorage and clean up old ones
-const loadReservations = () => {
-  try {
-    const saved = localStorage.getItem('washingMachineReservations');
-    if (saved) {
-      const reservations = JSON.parse(saved);
-      // Clean up reservations older than 7 days
-      const cleanedReservations = cleanOldReservations(reservations);
-      return cleanedReservations;
-    }
-  } catch (error) {
-    console.error('Error loading reservations from localStorage:', error);
-  }
-  return {
+
+
+const MainApp = () => {
+  const { isAuthenticated, isLoading, displayName, user, firebaseUser, isFirebaseAuthenticated } = useAuth();
+  const [selectedMachine, setSelectedMachine] = useState(null);
+  const [reservations, setReservations] = useState({
     machine1: [],
     machine2: [],
     dryer: []
-  };
-};
-
-// Clean up reservations older than 7 days
-const cleanOldReservations = (reservations) => {
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  
-  const cleaned = {};
-  Object.keys(reservations).forEach(machine => {
-    cleaned[machine] = reservations[machine].filter(reservation => {
-      if (!reservation.createdAt) return true; // Keep reservations without timestamp for backward compatibility
-      const reservationDate = new Date(reservation.createdAt);
-      return reservationDate > sevenDaysAgo;
-    });
   });
-  
-  return cleaned;
-};
+  const [connectionStatus, setConnectionStatus] = useState(reservationService.getStatus());
 
-// Save reservations to localStorage
-const saveReservations = (reservations) => {
-  try {
-    localStorage.setItem('washingMachineReservations', JSON.stringify(reservations));
-  } catch (error) {
-    console.error('Error saving reservations to localStorage:', error);
-  }
-};
-
-const MainApp = () => {
-  const { isAuthenticated, isLoading, displayName } = useAuth();
-  const [selectedMachine, setSelectedMachine] = useState(null);
-  const [reservations, setReservations] = useState(loadReservations);
-
-  // Save reservations to localStorage whenever they change
+  // Set up real-time subscription to reservations
   useEffect(() => {
-    saveReservations(reservations);
-  }, [reservations]);
+    if (!isAuthenticated) return;
+
+    console.log('Setting up reservation subscription...');
+    const unsubscribe = reservationService.subscribeToReservations((newReservations) => {
+      console.log('Reservations updated:', newReservations);
+      setReservations(newReservations);
+    });
+
+    // Update connection status
+    setConnectionStatus(reservationService.getStatus());
+
+    return () => {
+      console.log('Cleaning up reservation subscription');
+      unsubscribe();
+    };
+  }, [isAuthenticated]);
 
   const handleMachineSelect = (machine) => {
     setSelectedMachine(machine);
@@ -92,28 +69,35 @@ const MainApp = () => {
     setSelectedMachine(null);
   };
 
-  const clearAllReservations = () => {
+  const clearAllReservations = async () => {
     if (window.confirm('Are you sure you want to clear all reservations?')) {
-      setReservations({
-        machine1: [],
-        machine2: [],
-        dryer: []
-      });
+      try {
+        await reservationService.clearAllReservations();
+        console.log('All reservations cleared');
+      } catch (error) {
+        console.error('Error clearing reservations:', error);
+        alert('Failed to clear reservations. Please try again.');
+      }
     }
   };
 
-  const addReservation = (machineType, reservation) => {
-    const reservationWithTimestamp = {
+  const addReservation = async (machineType, reservation) => {
+    const reservationData = {
       ...reservation,
       userName: displayName, // Use the user's display name
-      createdAt: new Date().toISOString(),
-      id: Date.now() + Math.random() // Simple unique ID
+      userId: firebaseUser?.uid || user?.id || 'anonymous', // Use Firebase UID for Firestore auth
+      googleUserId: user?.id, // Keep Google ID for reference
+      userEmail: user?.email || firebaseUser?.email
     };
     
-    setReservations(prev => ({
-      ...prev,
-      [machineType]: [...prev[machineType], reservationWithTimestamp]
-    }));
+    try {
+      console.log('Adding reservation with Firebase UID:', firebaseUser?.uid);
+      await reservationService.addReservation(machineType, reservationData);
+      console.log('Reservation added successfully');
+    } catch (error) {
+      console.error('Error adding reservation:', error);
+      alert('Failed to add reservation. Please try again.');
+    }
   };
 
   if (isLoading) {
@@ -144,6 +128,31 @@ const MainApp = () => {
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             🧺 Washing Machine Schedule
           </Typography>
+          
+          {/* Connection Status */}
+          <Chip
+            label={
+              connectionStatus.firebaseEnabled && isFirebaseAuthenticated 
+                ? 'Online (Synced)' 
+                : connectionStatus.firebaseEnabled && !isFirebaseAuthenticated
+                ? 'Online (Auth Required)'
+                : 'Offline'
+            }
+            size="small"
+            color={
+              connectionStatus.firebaseEnabled && isFirebaseAuthenticated 
+                ? 'success' 
+                : connectionStatus.firebaseEnabled 
+                ? 'warning'
+                : 'error'
+            }
+            sx={{ 
+              mr: 2, 
+              color: 'white',
+              '& .MuiChip-label': { color: 'white' }
+            }}
+          />
+          
           <Button 
             color="inherit" 
             onClick={clearAllReservations}
