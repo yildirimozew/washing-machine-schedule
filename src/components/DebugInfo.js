@@ -71,7 +71,7 @@ const DebugInfo = () => {
             <Typography variant="body2">
               Debug Info & Troubleshooting
             </Typography>
-            {isDemo && <Chip label="Demo Mode" size="small" color="warning" />}
+            {!firebaseConfigured && <Chip label="Demo Mode" size="small" color="warning" />}
           </Box>
         </AccordionSummary>
         <AccordionDetails>
