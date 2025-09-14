@@ -22,25 +22,26 @@ import {
 } from '@mui/icons-material';
 
 const TimeSlotGrid = ({ selectedMachine, reservations, onBack, onAddReservation }) => {
-  const [selectedSlots, setSelectedSlots] = useState([]);
+  const [selectedDay, setSelectedDay] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [userName, setUserName] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
 
-  // Generate time slots from 6 AM to 11 PM (30-minute intervals)
-  const generateTimeSlots = () => {
-    const slots = [];
+  // Generate hour markers for the timeline
+  const generateHourMarkers = () => {
+    const markers = [];
     for (let hour = 6; hour <= 23; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
-        if (hour === 23 && minute === 30) break; // Stop at 11:00 PM
-        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-        slots.push(timeString);
-      }
+      markers.push({
+        hour,
+        label: `${hour.toString().padStart(2, '0')}:00`,
+        position: ((hour - 6) / 17) * 100 // 17 hours total (6 AM to 11 PM)
+      });
     }
-    return slots;
+    return markers;
   };
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  const timeSlots = generateTimeSlots();
+  const hourMarkers = generateHourMarkers();
 
   const getMachineInfo = () => {
     const info = {
@@ -51,45 +52,89 @@ const TimeSlotGrid = ({ selectedMachine, reservations, onBack, onAddReservation 
     return info[selectedMachine];
   };
 
-  const isSlotReserved = (day, time) => {
-    return reservations.some(reservation => 
-      reservation.day === day && reservation.time === time
-    );
+  // Helper function to convert time string to minutes
+  const timeToMinutes = (timeStr) => {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    return hours * 60 + minutes;
   };
 
-  const isSlotSelected = (day, time) => {
-    return selectedSlots.some(slot => slot.day === day && slot.time === time);
+  // Helper function to convert minutes to time string
+  const minutesToTime = (minutes) => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
   };
 
-  const handleSlotClick = (day, time) => {
-    const isCurrentlySelected = isSlotSelected(day, time);
+  // Convert time to position percentage on timeline (6 AM = 0%, 11 PM = 100%)
+  const timeToPosition = (timeStr) => {
+    const minutes = timeToMinutes(timeStr);
+    const startMinutes = 6 * 60; // 6 AM
+    const endMinutes = 23 * 60; // 11 PM
+    const totalMinutes = endMinutes - startMinutes;
+    return ((minutes - startMinutes) / totalMinutes) * 100;
+  };
+
+  // Get reservations for a specific day
+  const getDayReservations = (day) => {
+    return reservations.filter(reservation => reservation.day === day);
+  };
+
+  const handleDayClick = (day) => {
+    setSelectedDay(day);
+    setDialogOpen(true);
+  };
+
+  const validateTimeRange = () => {
+    if (!startTime || !endTime) return { isValid: false, error: 'Please enter both start and end times' };
     
-    if (isCurrentlySelected) {
-      // Remove slot
-      setSelectedSlots(prev => prev.filter(slot => 
-        !(slot.day === day && slot.time === time)
-      ));
-    } else if (!isSlotReserved(day, time)) {
-      // Add slot
-      setSelectedSlots(prev => [...prev, { day, time }]);
+    const startMinutes = timeToMinutes(startTime);
+    const endMinutes = timeToMinutes(endTime);
+    
+    if (startMinutes >= endMinutes) {
+      return { isValid: false, error: 'End time must be after start time' };
     }
+    
+    if (startMinutes < 6 * 60 || endMinutes > 23 * 60) {
+      return { isValid: false, error: 'Time must be between 6:00 and 23:00' };
+    }
+    
+    // Check for conflicts with existing reservations
+    const hasConflict = reservations.some(reservation => {
+      if (reservation.day !== selectedDay) return false;
+      const resStartMinutes = timeToMinutes(reservation.startTime);
+      const resEndMinutes = timeToMinutes(reservation.endTime);
+      
+      // Check if new reservation overlaps with existing one
+      return !(endMinutes <= resStartMinutes || startMinutes >= resEndMinutes);
+    });
+    
+    if (hasConflict) {
+      return { isValid: false, error: 'This time conflicts with an existing reservation' };
+    }
+    
+    return { isValid: true, error: null };
   };
 
   const handleSaveReservation = () => {
-    if (selectedSlots.length === 0 || !userName.trim()) return;
+    if (!selectedDay || !startTime || !endTime) return;
 
-    selectedSlots.forEach(slot => {
-      onAddReservation({
-        day: slot.day,
-        time: slot.time,
-        userName: userName.trim(),
-        machine: selectedMachine,
-        duration: getMachineInfo().duration
-      });
+    const validation = validateTimeRange();
+    if (!validation.isValid) {
+      alert(validation.error);
+      return;
+    }
+
+    onAddReservation({
+      day: selectedDay,
+      startTime: startTime,
+      endTime: endTime,
+      machine: selectedMachine,
+      duration: getMachineInfo().duration
     });
 
-    setSelectedSlots([]);
-    setUserName('');
+    setSelectedDay(null);
+    setStartTime('');
+    setEndTime('');
     setDialogOpen(false);
   };
 
@@ -114,140 +159,226 @@ const TimeSlotGrid = ({ selectedMachine, reservations, onBack, onAddReservation 
         />
       </Box>
 
-      {/* Selected slots info */}
-      {selectedSlots.length > 0 && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          {selectedSlots.length} slot(s) selected. 
-          <Button 
-            variant="contained" 
-            size="small" 
-            sx={{ ml: 2 }}
-            onClick={() => setDialogOpen(true)}
-          >
-            Make Reservation
-          </Button>
-          <Button 
-            variant="outlined" 
-            size="small" 
-            sx={{ ml: 1 }}
-            onClick={() => setSelectedSlots([])}
-          >
-            Clear Selection
-          </Button>
-        </Alert>
-      )}
+      {/* Instructions */}
+      <Alert severity="info" sx={{ mb: 2 }}>
+        Click on a day column header to make a reservation for that day.
+      </Alert>
 
-      {/* Time slot grid */}
+      {/* Continuous Timeline */}
       <Card>
         <CardContent>
           <Box sx={{ overflowX: 'auto' }}>
-            <Grid container spacing={1} sx={{ minWidth: 800 }}>
-              {/* Header row with days */}
-              <Grid item xs={2}>
-                <Box sx={{ height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Typography variant="h6">Time</Typography>
-                </Box>
-              </Grid>
-              {days.map(day => (
-                <Grid item xs={1.43} key={day}>
-                  <Box sx={{ 
-                    height: 60, 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    backgroundColor: '#f5f5f5',
-                    borderRadius: 1
-                  }}>
-                    <Typography variant="subtitle1" fontWeight="bold">
-                      {day.substring(0, 3)}
+            <Box sx={{ minWidth: 800 }}>
+              {/* Time axis header */}
+              <Box sx={{ 
+                position: 'relative', 
+                height: 40, 
+                mb: 2, 
+                backgroundColor: '#f5f5f5',
+                borderRadius: 1,
+                border: 1,
+                borderColor: '#e0e0e0'
+              }}>
+                {hourMarkers.map(marker => (
+                  <Box
+                    key={marker.hour}
+                    sx={{
+                      position: 'absolute',
+                      left: `${marker.position}%`,
+                      height: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      transform: 'translateX(-50%)',
+                      borderLeft: marker.hour % 2 === 0 ? '1px solid #ddd' : 'none'
+                    }}
+                  >
+                    <Typography variant="caption" sx={{ fontSize: '0.75rem', fontWeight: 'medium' }}>
+                      {marker.label}
                     </Typography>
                   </Box>
-                </Grid>
-              ))}
+                ))}
+              </Box>
 
-              {/* Time slots */}
-              {timeSlots.map(time => (
-                <React.Fragment key={time}>
-                  <Grid item xs={2}>
-                    <Box sx={{ 
-                      height: 40, 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center',
-                      backgroundColor: '#fafafa',
-                      borderRadius: 1
-                    }}>
-                      <Typography variant="body2" fontWeight="medium">
-                        {time}
+              {/* Day timeline rows */}
+              {days.map(day => {
+                const dayReservations = getDayReservations(day);
+                return (
+                  <Box key={day} sx={{ mb: 2 }}>
+                    {/* Day header */}
+                    <Box 
+                      onClick={() => handleDayClick(day)}
+                      sx={{ 
+                        display: 'flex',
+                        alignItems: 'center',
+                        mb: 1,
+                        p: 1,
+                        backgroundColor: selectedDay === day ? machineInfo.color : '#f5f5f5',
+                        color: selectedDay === day ? 'white' : 'inherit',
+                        borderRadius: 1,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          backgroundColor: selectedDay === day ? machineInfo.color : '#e0e0e0',
+                          transform: 'translateX(4px)',
+                        }
+                      }}
+                    >
+                      <Typography variant="subtitle1" fontWeight="bold" sx={{ minWidth: 100 }}>
+                        {day}
+                      </Typography>
+                      <Typography variant="caption" color="inherit" sx={{ opacity: 0.7 }}>
+                        Click to add reservation
                       </Typography>
                     </Box>
-                  </Grid>
-                  {days.map(day => {
-                    const reserved = isSlotReserved(day, time);
-                    const selected = isSlotSelected(day, time);
-                    const reservation = reservations.find(r => r.day === day && r.time === time);
-                    
-                    return (
-                      <Grid item xs={1.43} key={`${day}-${time}`}>
+
+                    {/* Timeline bar */}
+                    <Box sx={{
+                      position: 'relative',
+                      height: 50,
+                      backgroundColor: '#f9f9f9',
+                      border: 1,
+                      borderColor: '#e0e0e0',
+                      borderRadius: 1,
+                      overflow: 'hidden'
+                    }}>
+                      {/* Hour grid lines */}
+                      {hourMarkers.map(marker => (
                         <Box
-                          onClick={() => handleSlotClick(day, time)}
+                          key={`${day}-grid-${marker.hour}`}
                           sx={{
-                            height: 40,
-                            border: 1,
-                            borderColor: selected ? machineInfo.color : reserved ? '#f44336' : '#e0e0e0',
-                            backgroundColor: reserved ? '#ffebee' : selected ? `${machineInfo.color}20` : 'white',
-                            borderRadius: 1,
-                            cursor: reserved ? 'not-allowed' : 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.2s ease',
-                            '&:hover': {
-                              borderColor: reserved ? '#f44336' : machineInfo.color,
-                              backgroundColor: reserved ? '#ffebee' : `${machineInfo.color}30`,
-                            }
+                            position: 'absolute',
+                            left: `${marker.position}%`,
+                            top: 0,
+                            bottom: 0,
+                            borderLeft: '1px solid #e8e8e8',
+                            width: 1
                           }}
-                        >
-                          {reserved && (
-                            <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 'bold' }}>
-                              {reservation?.userName || 'Reserved'}
+                        />
+                      ))}
+
+                      {/* Reservation blocks */}
+                      {dayReservations.map((reservation, index) => {
+                        const startPos = timeToPosition(reservation.startTime);
+                        const endPos = timeToPosition(reservation.endTime);
+                        const width = endPos - startPos;
+                        
+                        return (
+                          <Box
+                            key={`${day}-reservation-${index}`}
+                            sx={{
+                              position: 'absolute',
+                              left: `${startPos}%`,
+                              width: `${width}%`,
+                              top: 4,
+                              bottom: 4,
+                              backgroundColor: '#ffcdd2',
+                              border: 1,
+                              borderColor: '#f44336',
+                              borderRadius: 1,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              overflow: 'hidden',
+                              minWidth: 2
+                            }}
+                          >
+                            <Typography 
+                              variant="caption" 
+                              sx={{ 
+                                fontSize: '0.7rem', 
+                                fontWeight: 'bold',
+                                color: '#d32f2f',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                px: 0.5
+                              }}
+                            >
+                              {reservation.userName} ({reservation.startTime}-{reservation.endTime})
                             </Typography>
-                          )}
-                        </Box>
-                      </Grid>
-                    );
-                  })}
-                </React.Fragment>
-              ))}
-            </Grid>
+                          </Box>
+                        );
+                      })}
+                      
+                      {/* Click overlay for adding reservations */}
+                      <Box
+                        onClick={() => handleDayClick(day)}
+                        sx={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          cursor: 'pointer',
+                          zIndex: 1,
+                          '&:hover': {
+                            backgroundColor: `${machineInfo.color}10`
+                          }
+                        }}
+                      />
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Box>
           </Box>
         </CardContent>
       </Card>
 
       {/* Reservation Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Make Reservation</DialogTitle>
+        <DialogTitle>Make Reservation for {selectedDay}</DialogTitle>
         <DialogContent>
-          <Typography variant="body1" sx={{ mb: 2 }}>
-            You've selected {selectedSlots.length} time slot(s) for {machineInfo.name}.
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            Creating reservation for {machineInfo.name} on {selectedDay}
           </Typography>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Your Name"
-            fullWidth
-            variant="outlined"
-            value={userName}
-            onChange={(e) => setUserName(e.target.value)}
-            placeholder="Enter your name"
-          />
+          
+          <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+            <TextField
+              label="Start Time"
+              type="time"
+              variant="outlined"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{
+                min: "06:00",
+                max: "23:00",
+                step: "1800" // 30 minute intervals
+              }}
+              fullWidth
+            />
+            <TextField
+              label="End Time"
+              type="time"
+              variant="outlined"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{
+                min: "06:00",
+                max: "23:00",
+                step: "1800" // 30 minute intervals
+              }}
+              fullWidth
+            />
+          </Box>
+          
+          <Typography variant="caption" color="text.secondary">
+            Available hours: 6:00 AM - 11:00 PM
+          </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => {
+            setDialogOpen(false);
+            setSelectedDay(null);
+            setStartTime('');
+            setEndTime('');
+          }}>Cancel</Button>
           <Button 
             onClick={handleSaveReservation}
             variant="contained"
-            disabled={!userName.trim() || selectedSlots.length === 0}
+            disabled={!startTime || !endTime}
           >
             Save Reservation
           </Button>

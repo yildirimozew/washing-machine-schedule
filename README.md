@@ -4,10 +4,13 @@ A React app for flatmates to schedule washing machine and dryer usage times.
 
 ## Features
 
+- **Google Authentication**: Secure login with Google OAuth
+- **User Profiles**: Set custom display names for reservations
 - **Machine Selection**: Choose between 2 washing machines or 1 dryer
-- **Time Slot Grid**: Visual weekly schedule with 30-minute time slots (6 AM - 11 PM)
-- **Smart Duration**: Washing machines (1.5 hours), Dryer (2 hours)
-- **Simple Reservations**: Click slots, enter your name, and save
+- **Continuous Timeline**: Visual weekly schedule with continuous time axis (6 AM - 11 PM)
+- **Flexible Reservations**: Select any day, enter custom start/end times
+- **Persistent Storage**: Reservations saved to browser localStorage
+- **Conflict Detection**: Prevents overlapping reservations
 - **Material-UI Design**: Clean, modern interface with Google Material theme
 - **Mobile Responsive**: Works on all devices
 
@@ -18,12 +21,26 @@ A React app for flatmates to schedule washing machine and dryer usage times.
    npm install
    ```
 
-2. **Start development server**:
+2. **Configure Google OAuth**:
+   - Go to [Google Cloud Console](https://console.developers.google.com/)
+   - Create a new project or select existing one
+   - Enable the Google+ API
+   - Create OAuth 2.0 credentials (Web application)
+   - Add your domain to authorized JavaScript origins
+   - Copy the client ID
+
+3. **Set environment variables**:
+   Create a `.env.local` file in the project root:
+   ```bash
+   REACT_APP_GOOGLE_CLIENT_ID=your-google-oauth-client-id-here.apps.googleusercontent.com
+   ```
+
+4. **Start development server**:
    ```bash
    npm start
    ```
 
-3. **Build for production**:
+5. **Build for production**:
    ```bash
    npm run build
    ```
@@ -58,24 +75,39 @@ Your app will be available at: `https://yourusername.github.io/washing-machine-s
 
 ## How to Use
 
-1. **Select a Machine**: Choose from Washing Machine 1, Washing Machine 2, or Dryer
-2. **Pick Time Slots**: Click on available time slots in the weekly grid
-3. **Enter Your Name**: When ready, click "Make Reservation" and enter your name
-4. **Save**: Your reservation will appear on the schedule
+1. **Sign In**: Click "Sign in with Google" to authenticate
+2. **Set Display Name**: Edit your profile to set a custom name for reservations
+3. **Select a Machine**: Choose from Washing Machine 1, Washing Machine 2, or Dryer
+4. **Pick a Day**: Click on any day header or timeline to start a reservation
+5. **Set Times**: Enter your preferred start and end times
+6. **Save**: Your reservation will appear as a block on the continuous timeline
+
+## Timeline Interface
+
+- **Continuous Time Axis**: 6:00 AM to 11:00 PM displayed as a continuous timeline
+- **Reservation Blocks**: Existing reservations shown as colored blocks with user names
+- **Flexible Times**: Enter any start/end time within operating hours
+- **Conflict Prevention**: System prevents overlapping reservations
+- **Visual Feedback**: Hover effects and clear visual indicators
 
 ## Technical Details
 
 - **Framework**: React 18
 - **UI Library**: Material-UI (MUI) v5
+- **Authentication**: Google OAuth 2.0 with Google Identity Services
 - **Icons**: Material Icons
-- **State Management**: React useState (local storage coming soon)
+- **State Management**: React Context + useState
+- **Storage**: Browser localStorage with automatic cleanup
+- **Timeline**: Continuous time axis with percentage-based positioning
 - **Responsive**: Mobile-first design
-- **Time Slots**: 30-minute intervals from 6:00 AM to 11:00 PM
+- **Time Range**: 6:00 AM to 11:00 PM with flexible start/end times
 
 ## Future Enhancements
 
-- Local storage persistence
-- Automatic reservation cleanup
-- Email notifications
-- Admin panel for managing reservations
-- Conflict resolution for overlapping bookings 
+- Email/SMS notifications for upcoming reservations
+- Admin panel for managing users and reservations
+- Calendar integration (Google Calendar, Outlook)
+- Mobile app version
+- Real-time sync across multiple devices
+- Usage analytics and reporting
+- Integration with smart home systems 
