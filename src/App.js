@@ -69,18 +69,6 @@ const MainApp = () => {
     setSelectedMachine(null);
   };
 
-  const clearAllReservations = async () => {
-    if (window.confirm('Are you sure you want to clear all reservations?')) {
-      try {
-        await reservationService.clearAllReservations();
-        console.log('All reservations cleared');
-      } catch (error) {
-        console.error('Error clearing reservations:', error);
-        alert('Failed to clear reservations. Please try again.');
-      }
-    }
-  };
-
   const addReservation = async (machineType, reservation) => {
     const reservationData = {
       ...reservation,
@@ -97,6 +85,26 @@ const MainApp = () => {
     } catch (error) {
       console.error('Error adding reservation:', error);
       alert('Failed to add reservation. Please try again.');
+    }
+  };
+
+  const deleteReservation = async (reservation) => {
+    // Check if user owns this reservation
+    const currentUserId = firebaseUser?.uid || user?.id || 'anonymous';
+    if (reservation.userId !== currentUserId) {
+      alert('You can only delete your own reservations.');
+      return;
+    }
+
+    const confirmMessage = `Delete your reservation on ${reservation.day} from ${reservation.startTime} to ${reservation.endTime}?`;
+    if (window.confirm(confirmMessage)) {
+      try {
+        await reservationService.deleteReservation(reservation.id);
+        console.log('Reservation deleted successfully');
+      } catch (error) {
+        console.error('Error deleting reservation:', error);
+        alert('Failed to delete reservation. Please try again.');
+      }
     }
   };
 
@@ -153,13 +161,6 @@ const MainApp = () => {
             }}
           />
           
-          <Button 
-            color="inherit" 
-            onClick={clearAllReservations}
-            sx={{ mr: 2 }}
-          >
-            Clear All
-          </Button>
           <UserProfile />
         </Toolbar>
       </AppBar>
@@ -181,6 +182,8 @@ const MainApp = () => {
               reservations={reservations[selectedMachine]}
               onBack={handleBackToSelection}
               onAddReservation={(reservation) => addReservation(selectedMachine, reservation)}
+              onDeleteReservation={deleteReservation}
+              currentUserId={firebaseUser?.uid || user?.id || 'anonymous'}
             />
           )}
         </Box>

@@ -21,7 +21,7 @@ import {
   DryCleaning
 } from '@mui/icons-material';
 
-const TimeSlotGrid = ({ selectedMachine, reservations, onBack, onAddReservation }) => {
+const TimeSlotGrid = ({ selectedMachine, reservations, onBack, onAddReservation, onDeleteReservation, currentUserId }) => {
   const [selectedDay, setSelectedDay] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [startTime, setStartTime] = useState('');
@@ -161,7 +161,8 @@ const TimeSlotGrid = ({ selectedMachine, reservations, onBack, onAddReservation 
 
       {/* Instructions */}
       <Alert severity="info" sx={{ mb: 2 }}>
-        Click on a day column header to make a reservation for that day.
+        <strong>To add:</strong> Click on a day column header to make a reservation.<br />
+        <strong>To delete:</strong> Click on your own reservations (highlighted in red) to remove them.
       </Alert>
 
       {/* Continuous Timeline */}
@@ -261,33 +262,51 @@ const TimeSlotGrid = ({ selectedMachine, reservations, onBack, onAddReservation 
                         const startPos = timeToPosition(reservation.startTime);
                         const endPos = timeToPosition(reservation.endTime);
                         const width = endPos - startPos;
+                        const isOwnReservation = reservation.userId === currentUserId;
                         
                         return (
                           <Box
                             key={`${day}-reservation-${index}`}
+                            onClick={() => {
+                              if (isOwnReservation && onDeleteReservation) {
+                                onDeleteReservation(reservation);
+                              } else if (!isOwnReservation) {
+                                alert(`This reservation belongs to ${reservation.userName}. You can only delete your own reservations.`);
+                              }
+                            }}
                             sx={{
                               position: 'absolute',
                               left: `${startPos}%`,
                               width: `${width}%`,
                               top: 4,
                               bottom: 4,
-                              backgroundColor: '#ffcdd2',
+                              backgroundColor: isOwnReservation ? '#ffcdd2' : '#f5f5f5',
                               border: 1,
-                              borderColor: '#f44336',
+                              borderColor: isOwnReservation ? '#f44336' : '#bdbdbd',
                               borderRadius: 1,
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               overflow: 'hidden',
-                              minWidth: 2
+                              minWidth: 2,
+                              cursor: isOwnReservation ? 'pointer' : 'default',
+                              transition: 'all 0.2s ease',
+                              zIndex: 2,
+                              '&:hover': isOwnReservation ? {
+                                backgroundColor: '#ef9a9a',
+                                borderColor: '#e53935',
+                                transform: 'scale(1.02)',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                              } : {}
                             }}
+                            title={isOwnReservation ? 'Click to delete your reservation' : `Reserved by ${reservation.userName}`}
                           >
                             <Typography 
                               variant="caption" 
                               sx={{ 
                                 fontSize: '0.7rem', 
                                 fontWeight: 'bold',
-                                color: '#d32f2f',
+                                color: isOwnReservation ? '#d32f2f' : '#616161',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
                                 overflow: 'hidden',
